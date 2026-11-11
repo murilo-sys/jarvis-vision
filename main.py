@@ -8,8 +8,7 @@ from classes.posture_monitor import PostureMonitor
 mp_pose = mp.solutions.pose
 pose_detector = mp_pose.Pose()
 
-
-# Google hands inteligent
+# Google hands intelligent
 mp_hands = mp.solutions.hands
 mp_draw = mp.solutions.drawing_utils
 
@@ -19,7 +18,6 @@ hands_detector = mp_hands.Hands(max_num_hands=1)
 # Instance classes
 volume_controler = VolumeControler()
 posture_monitor = PostureMonitor()
-
 
 camera = cv2.VideoCapture(0)
 
@@ -46,21 +44,24 @@ while True:
     pose_result = pose_detector.process(frame_rgb)
 
     if pose_result.pose_landmarks:
-        mp_draw.draw_landmarks(
-            frame, pose_result.pose_landmarks, mp_pose.POSE_CONNECTIONS
-        )
+        # get landmarks from body
         landamarks = pose_result.pose_landmarks.landmark
 
+        # get left (11) and right (12) shoulders position
         left_sh = landamarks[11]
         right_sh = landamarks[12]
 
+        # convert the position (0.0 - 1.0) to real pixels from screen
         lx, ly = int(left_sh.x * width), int(left_sh.y * height)
         rx, ry = int(right_sh.x * width), int(right_sh.y * height)
 
+        # check if the posture is aligned with the limit line
         posture_ok, limit_y = posture_monitor.check_posture(ly, ry)
 
+        # green if posture is ok, red if slouching
         color = (0, 255, 0) if posture_ok else (0, 0, 255)
 
+        # draw circles on shoulders and the limit line on screen
         cv2.circle(frame, (lx, ly), 8, color, -1)
         cv2.circle(frame, (rx, ry), 8, color, -1)
         cv2.line(frame, (lx, ly), (rx, ry), color, 3)
@@ -131,6 +132,7 @@ while True:
 
     cv2.imshow("Jarvis Vision", frame)
 
+    # listen to keyboard shortcuts (q = quit, v = lock volume, c = calibrate posture)
     key = cv2.waitKey(1) & 0xFF
 
     if key == ord("q"):
