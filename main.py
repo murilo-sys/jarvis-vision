@@ -77,6 +77,18 @@ while True:
                 (0, 0, 255),
                 4,
             )
+    else:
+        # if no body is detected, start countdown to lock Windows
+        seconds_left = posture_monitor.check_absence()
+        cv2.putText(
+            frame,
+            f"Locking PC in {seconds_left}s...",
+            (150, 250),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.2,
+            (0, 165, 255),
+            3,
+        )
 
     if hand_result.multi_hand_landmarks:
         for hand in hand_result.multi_hand_landmarks:
@@ -129,8 +141,6 @@ while True:
                 (255, 230, 0),
                 2,
             )
-
-    cv2.imshow("Jarvis Vision", frame)
 
     # listen to keyboard shortcuts (q = quit, v = lock volume, c = calibrate posture)
     key = cv2.waitKey(1) & 0xFF
