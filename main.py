@@ -1,6 +1,13 @@
 import cv2
 import math
 import mediapipe as mp
+from classes.volume_control import VolumeControler
+from classes.posture_monitor import PostureMonitor
+
+# Google pose detector
+mp_pose = mp.solutions.pose
+pose_detector = mp_pose.Pose()
+
 
 # Google hands inteligent
 mp_hands = mp.solutions.hands
@@ -8,6 +15,11 @@ mp_draw = mp.solutions.drawing_utils
 
 # Create the detector (max_num_hands focus only in one hand to be fast)
 hands_detector = mp_hands.Hands(max_num_hands=1)
+
+# Instance classes
+volume_controler = VolumeControler()
+posture_monitor = PostureMonitor()
+
 
 camera = cv2.VideoCapture(0)
 
@@ -28,10 +40,45 @@ while True:
     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
     # execute IA to find the hand
-    result = hands_detector.process(frame_rgb)
+    hand_result = hands_detector.process(frame_rgb)
 
-    if result.multi_hand_landmarks:
-        for hand in result.multi_hand_landmarks:
+    # execute IA to find the shoulders/body
+    pose_result = pose_detector.process(frame_rgb)
+
+    if pose_result.pose_landmarks:
+        mp_draw.draw_landmarks(
+            frame, pose_result.pose_landmarks, mp_pose.POSE_CONNECTIONS
+        )
+        landamarks = pose_result.pose_landmarks.landmark
+
+        left_sh = landamarks[11]
+        right_sh = landamarks[12]
+
+        lx, ly = int(left_sh.x * width), int(left_sh.y * height)
+        rx, ry = int(right_sh.x * width), int(right_sh.y * height)
+
+        posture_ok, limit_y = posture_monitor.check_posture(ly, ry)
+
+        color = (0, 255, 0) if posture_ok else (0, 0, 255)
+
+        cv2.circle(frame, (lx, ly), 8, color, -1)
+        cv2.circle(frame, (rx, ry), 8, color, -1)
+        cv2.line(frame, (lx, ly), (rx, ry), color, 3)
+        cv2.line(frame, (0, limit_y), (width, limit_y), color, 2)
+
+        if not posture_ok:
+            cv2.putText(
+                frame,
+                "SENTA DIREITO!",
+                (150, 250),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.5,
+                (0, 0, 255),
+                4,
+            )
+
+    if hand_result.multi_hand_landmarks:
+        for hand in hand_result.multi_hand_landmarks:
             mp_draw.draw_landmarks(frame, hand, mp_hands.HAND_CONNECTIONS)
 
             # get position from fingers
@@ -50,10 +97,32 @@ while True:
             # calculate the distance between the fingers
             distance = int(math.hypot(x2 - x1, y2 - y1))
 
+            volume = volume_controler.change_by_the_distance(distance)
+
+            cv2.putText(
+                frame,
+                f"Volume: {volume}%",
+                (20, 50),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (255, 230, 0),
+                2,
+            )
+
             cv2.putText(
                 frame,
                 f"Distance: {distance}",
-                (20, 50),
+                (20, 90),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (255, 230, 0),
+                2,
+            )
+
+            cv2.putText(
+                frame,
+                f"Volume Locked: {volume_controler.volume_locked}",
+                (20, 120),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 1,
                 (255, 230, 0),
@@ -62,8 +131,15 @@ while True:
 
     cv2.imshow("Jarvis Vision", frame)
 
-    if cv2.waitKey(1) & 0xFF == ord("q"):
+    key = cv2.waitKey(1) & 0xFF
+
+    if key == ord("q"):
         break
+    elif key == ord("v"):
+        volume_controler.volume_locked = not volume_controler.volume_locked
+    elif key == ord("c"):
+        if pose_result.pose_landmarks:
+            posture_monitor.calibrate(int((ly + ry) / 2))
 
 camera.release()
 cv2.destroyAllWindows()
